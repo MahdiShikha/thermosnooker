@@ -2,7 +2,6 @@
 Contains the base and specific Simulation classes
 for 2D elastic-collision systems
 """
-# pylint: disable=import-error
 import matplotlib.pyplot as plt
 import numpy as np
 from thermosnooker.balls import Ball, Container
