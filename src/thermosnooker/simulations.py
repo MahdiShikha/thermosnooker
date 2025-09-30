@@ -31,7 +31,7 @@ def rtrings(rmax,nrings,multi):
 
 class Simulation:
     """Base class for collision simulations."""
-
+    # Adapted from Advanced Practical Physics Computing project 2025 Alexander Richards
     def next_collision(self):
         """Check if next collision method is implemented."""
         raise NotImplementedError('next_collision() needs to be implemented in derived classes')
