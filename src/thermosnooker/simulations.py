@@ -2,9 +2,12 @@
 Contains the base and specific Simulation classes
 for 2D elastic-collision systems
 """
+from numbers import Integral
+from time import perf_counter
 import matplotlib.pyplot as plt
 import numpy as np
 from thermosnooker.balls import Ball, Container
+from thermosnooker.quadtree import next_quadtree_collision
 K_B = 1.380649e-23
 
 def rtrings(rmax,nrings,multi):
@@ -38,21 +41,32 @@ class Simulation:
     def setup_figure(self):
         """Check if next figure method is implemented."""
         raise NotImplementedError('setup_figure() needs to be implemented in derived classes')
-    def run(self, num_collisions, animate=False, pause_time=0.001):
+    def run(self, num_collisions, animate=False, pause_time=0.001,
+            output_time_taken=False):
         """Run the simulation for a number of collisions
         Args:
             num_collisions (int): how many collisions to be simulated
             animate (bool): if the simulation should be animated
             pause_time (float): how long each frame should last for
+            output_time_taken (bool): return elapsed wall-clock seconds
+
+        Returns:
+            float or None: elapsed seconds when requested, otherwise None.
+                Excludes figure setup and final show(); animation pauses
+                are included. Use animate=False for benchmarking.
         """
         if animate:
             fig, axes = self.setup_figure()
+        start = perf_counter()
         for _ in range(num_collisions):
             self.next_collision()
             if animate:
                 plt.pause(pause_time)
+        elapsed = perf_counter() - start
         if animate:
             plt.show()
+        if output_time_taken:
+            return elapsed
 
 class SingleBallSimulation(Simulation):
     """Simulation of a single ball colliding elasitcally within a container"""
@@ -110,7 +124,8 @@ class SingleBallSimulation(Simulation):
 class MultiBallSimulation(Simulation):
     """Simulation of many balls of equal radius in a container"""
     def __init__(self,
-    c_radius=10,b_radius=1,b_speed=10.,b_mass=1,rmax=8,nrings=3,multi=6):
+    c_radius=10,b_radius=1,b_speed=10.,b_mass=1,rmax=8,nrings=3,multi=6,
+    collision_search="brute_force",num_balls=None,seed=None):
         """Initalise balls in a container based on rtrings generation
 
         Args:
@@ -121,7 +136,20 @@ class MultiBallSimulation(Simulation):
             rmax (float): radius of outermost ring for intialisation
             nrings (int): number of rings
             multi (int): points per ring multiplier
+            collision_search (str): "brute_force" or "quadtree"
+            num_balls (int or None): first N ring positions, or all;
+                cannot exceed the capacity set by nrings and multi
+            seed (int or None): seed for reproducible initial velocities
         """
+        if collision_search not in ("brute_force", "quadtree"):
+            raise ValueError("collision_search must be 'brute_force' or 'quadtree'.")
+        if num_balls is not None:
+            if isinstance(num_balls,bool) or not isinstance(num_balls,Integral):
+                raise TypeError("num_balls must be a positive integer or None.")
+            capacity = 1 + multi*nrings*(nrings+1)//2
+            if num_balls <= 0 or num_balls > capacity:
+                raise ValueError(f"num_balls must be between 1 and ring capacity {capacity}.")
+        self._collision_search = collision_search
         self._container_radius = c_radius
         self._container = Container(self._container_radius)
         self._balls = []
@@ -129,11 +157,13 @@ class MultiBallSimulation(Simulation):
         self._kinetic_energy = []
         self._momentum = []
         self._pressure = []
+        rng = np.random.default_rng(seed)
         for r,theta in rtrings(rmax,nrings,multi):
+            if num_balls is not None and len(self._balls) == num_balls:
+                break
             x = r*np.cos(theta)
             y = r*np.sin(theta)
 
-            rng = np.random.default_rng()
             angle = rng.random()*2*np.pi
             vel_x = b_speed * np.cos(angle)
             vel_y = b_speed * np.sin(angle)
@@ -189,15 +219,18 @@ class MultiBallSimulation(Simulation):
                 event_info.append((t,self._container,i))
 
         #ball on ball collisions
-        for j, ball_1 in enumerate(self._balls):
-            for k in range(j+1,len(self._balls)):
-                ball_2 = self._balls[k]
-                t = ball_1.time_to_collision(ball_2)
-                if isinstance(t,float):
-                    event_info.append((t,ball_1,ball_2))
+        if self._collision_search == "quadtree":
+            event_info = [next_quadtree_collision(self._balls,self._container,event_info)]
+        else:
+            for j, ball_1 in enumerate(self._balls):
+                for k in range(j+1,len(self._balls)):
+                    ball_2 = self._balls[k]
+                    t = ball_1.time_to_collision(ball_2)
+                    if isinstance(t,float):
+                        event_info.append((t,ball_1,ball_2))
 
         #picking the next collision
-        t_min,object_1,object_2 = min(event_info)
+        t_min,object_1,object_2 = min(event_info,key=lambda event:event[0])
         self._container.move(t_min)
         for l in self._balls:
             l.move(t_min)
