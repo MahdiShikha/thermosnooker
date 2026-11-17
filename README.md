@@ -8,11 +8,12 @@ A 2D thermodynamic billiards simulation with multi-ball collisions, designed for
 - Wall collisions and energy/momentum tracking
 - Analysis of divergence from Ideal Gas Law
 - Optional Brownian-style perturbations for comparison to theory
+- Quadtree implementation and benchmark with brute force approach
 - Small, readable Python codebase
 
 
 ## Roadmap
-- Implementation of Quadtrees or similar approach in next_collision method to remove o(n^2) pair checks
+- ~~Implementation of Quadtrees or similar approach in next_collision method to remove o(n^2) pair checks~~
 - Use a JIT compilier such as Numba to accelerate runtime when calculating next collisions
 - Start analysis of Brownian motion, for example, calculate the mean square displacement of the big ball
 
