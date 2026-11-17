@@ -73,3 +73,5 @@ The tree is rebuilt each event because positions and velocities change.
 
 Compare multiple particle counts and repeats on the same machine before drawing
 conclusions about a speedup or asymptotic scaling.
+
+![alt text](timings.png "Logo Title Text 1")
